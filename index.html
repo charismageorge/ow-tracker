@@ -1,257 +1,221 @@
+
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OW Team Tracker</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OW Team Tracker V2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
-          extend: {
-            colors: {
-              ow: {
-                orange: "#f99e1a",
-                ink: "#0b0e14",
-                panel: "#141821",
-              },
-            },
-            fontFamily: {
-              sans: ["Inter", "Segoe UI", "system-ui", "sans-serif"],
-            },
-          },
-        },
+          extend: { colors: { ow: { orange: "#f99e1a", ink: "#0b0e14", panel: "#141821" } } }
+        }
       };
     </script>
-  </head>
-  <body class="min-h-screen bg-ow-ink text-slate-100 antialiased">
-    <!-- 背景光晕 -->
-    <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,158,26,0.12),_transparent_55%)]"></div>
+</head>
+<body class="min-h-screen bg-ow-ink text-slate-100 antialiased font-sans">
+    <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,158,26,0.1),_transparent_60%)]"></div>
 
-
-    <main class="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      <header class="mb-8 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4">
+    <main class="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      
+      <!-- Header & Controls -->
+      <header class="mb-8 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-white/10 pb-6">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.25em] text-ow-orange">Overwatch Tracker</p>
-          <h1 class="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Team Dashboard</h1>
-          <p class="mt-1 text-sm text-slate-400">实时追踪车队战力数据</p>
+          <p class="text-xs font-bold uppercase tracking-[0.25em] text-ow-orange">Overwatch Tracker V2.0</p>
+          <h1 class="mt-2 text-3xl font-black tracking-tight sm:text-4xl">数据去水，战力溯源</h1>
         </div>
-        <button id="refreshBtn" onclick="refreshTeamData()" class="flex items-center gap-2 rounded-lg bg-ow-orange px-5 py-2.5 text-sm font-bold text-ow-ink transition-all hover:bg-orange-400 disabled:opacity-50">
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-          <span id="refreshText">拉取最新数据</span>
-        </button>
+        <div class="flex items-center gap-3">
+          <select id="periodSelect" onchange="loadReport()" class="bg-ow-panel border border-white/20 text-sm rounded-lg px-3 py-2.5 text-white outline-none focus:border-ow-orange">
+            <option value="1">昨日复盘 (1 天)</option>
+            <option value="7" selected>本周战报 (7 天)</option>
+            <option value="30">月度总结 (30 天)</option>
+          </select>
+          <button id="refreshBtn" onclick="forceSync()" class="bg-ow-orange hover:bg-orange-500 text-ow-ink px-4 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center gap-2">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            强制拉取快照
+          </button>
+        </div>
       </header>
 
-
-      <!-- 队伍数据展示网格 -->
-      <section id="team-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        <!-- Loading 骨架屏 -->
-        <div id="loading" class="col-span-full flex flex-col items-center justify-center gap-4 py-16">
-          <div class="h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-ow-orange"></div>
-          <p class="text-sm font-medium tracking-wide text-slate-400">Loading team snapshots…</p>
+      <!-- Awards Wall -->
+      <section class="mb-10">
+        <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><span class="text-2xl">🏆</span> 本期“大王”颁奖台</h2>
+        <div id="awardsGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <!-- JS 渲染奖项 -->
         </div>
       </section>
 
+      <!-- Players Grid -->
+      <section id="playersGrid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <!-- JS 渲染卡片 -->
+      </section>
 
-      <!-- 错误提示 -->
-      <div id="error" class="hidden py-12 text-center col-span-full">
-        <p class="text-lg font-semibold text-rose-300">Could not load team data</p>
-        <p id="error-message" class="mt-2 text-sm text-slate-400"></p>
+      <!-- Loading State -->
+      <div id="loading" class="hidden flex-col items-center justify-center py-20">
+        <div class="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-ow-orange"></div>
+        <p class="mt-4 text-slate-400 font-medium">引擎分析中...</p>
       </div>
+
     </main>
 
-
     <script>
-      const ROLE_ORDER = ["tank", "damage", "support", "open"];
+      function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
+      function safeDiv(num, den) { return den > 0 ? num / den : 0; }
+      function getPer10(val, time) { return safeDiv(val, time) * 600; }
+      function getKDA(elims, assists, deaths) { return safeDiv(elims + assists, deaths > 0 ? deaths : 1); }
 
+      // 奖项图标映射
+      const awardIcons = {
+          "狗运小子（最佳胜率）": "🍀", "确实是会保活大王": "🛡️", "最爱回家大王": "💀",
+          "本周小天使": "👼", "伤害确实是打满了大王": "💥", "真正的团队核心奉献之神": "🤝",
+          "传奇刮痧大王": "🔋", "人头狗": "🥷", "真·杀意很大": "🩸",
+          "可能真的要等ELO了": "📉", "应该就没在上班": "🎮"
+      };
 
-      function capitalize(value) {
-        if (!value) return "";
-        return value.charAt(0).toUpperCase() + value.slice(1);
-      }
+      async function loadReport() {
+          const days = document.getElementById("periodSelect").value;
+          document.getElementById("playersGrid").innerHTML = "";
+          document.getElementById("awardsGrid").innerHTML = "";
+          document.getElementById("loading").classList.remove("hidden");
+          document.getElementById("loading").classList.add("flex");
 
-
-      // 获取竞技段位数据
-      function getCompetitiveRanks(summary) {
-        const competitive = summary.competitive || {};
-        return competitive.pc || competitive.console || null;
-      }
-
-
-      // 获取前三名最常玩英雄
-      // 获取前三名最常玩英雄（修复版）
-      function getTopHeroes(stats) {
-        if (!stats || !stats.heroes) return [];
-        
-        const heroesObj = stats.heroes;
-        const heroArray = [];
-        
-        // 将嵌套的对象转换为数组
-        for (const [heroName, heroData] of Object.entries(heroesObj)) {
-          if (heroData && heroData.time_played > 0) {
-            heroArray.push({
-              hero: heroName,
-              value: heroData.time_played,
-              winrate: heroData.winrate // 顺便把胜率也拿了
-            });
+          try {
+              const res = await fetch(`/api/report/${days}`);
+              const data = await res.json();
+              renderAwards(data.awards);
+              renderPlayers(data.players);
+          } catch(e) {
+              console.error(e);
+              alert("数据加载失败");
+          } finally {
+              document.getElementById("loading").classList.add("hidden");
+              document.getElementById("loading").classList.remove("flex");
           }
-        }
-        
-        // 按游玩时长从大到小排序
-        heroArray.sort((a, b) => b.value - a.value);
-        
-        // 返回前三名
-        return heroArray.slice(0, 3);
       }
 
-
-
-
-      // 渲染单张玩家卡片
-      function createPlayerCard(player) {
-        if (!player.found) {
-          return `
-            <div class="rounded-3xl border border-white/10 bg-ow-panel/50 p-6 flex items-center justify-center text-slate-500">
-              暂无 ${player.battle_tag} 的快照数据
-            </div>
-          `;
-        }
-
-
-        const summary = player.summary || {};
-        const stats = player.stats || {};
-        const compRanks = getCompetitiveRanks(summary);
-        const topHeroes = getTopHeroes(stats);
-
-
-        // 构建段位 HTML
-        let ranksHtml = '';
-        if (!compRanks) {
-          ranksHtml = '<p class="text-xs text-slate-500">Unranked / Private</p>';
-        } else {
-          ROLE_ORDER.forEach(role => {
-            const data = compRanks[role];
-            if (data) {
-              ranksHtml += `
-                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/5">
-                  <div class="flex items-center gap-1 mb-1">
-                    ${data.role_icon ? `<img src="${data.role_icon}" class="h-3 w-3 opacity-70">` : ''}
-                    <span class="text-[10px] uppercase text-slate-400">${role}</span>
+      function renderAwards(awards) {
+          if (!awards || Object.keys(awards).length === 0) return;
+          const container = document.getElementById("awardsGrid");
+          for (const [awardName, winner] of Object.entries(awards)) {
+              const icon = awardIcons[awardName] || "🏅";
+              const isBad = ["最爱回家大王", "可能真的要等ELO了", "传奇刮痧大王"].includes(awardName);
+              const colorClass = isBad ? "border-rose-900/50 bg-rose-950/20 text-rose-300" : "border-ow-orange/30 bg-ow-orange/10 text-ow-orange";
+              
+              container.innerHTML += `
+                  <div class="rounded-xl border ${colorClass} p-3 flex flex-col items-center justify-center text-center shadow-lg backdrop-blur-sm">
+                      <div class="text-2xl mb-1">${icon}</div>
+                      <div class="text-[10px] text-slate-300 font-medium mb-1">${awardName}</div>
+                      <div class="text-sm font-black truncate w-full">${winner}</div>
                   </div>
-                  <img src="${data.rank_icon}" class="h-8 w-8 object-contain mb-1">
-                  <span class="text-xs font-bold">${capitalize(data.division)} ${data.tier ?? ''}</span>
-                </div>
               `;
-            }
+          }
+      }
+
+      function renderPlayers(players) {
+          const container = document.getElementById("playersGrid");
+          
+          players.forEach(p => {
+              const username = p.summary.username || p.battle_tag;
+              const avatar = p.summary.avatar || "";
+              
+              if (!p.has_delta) {
+                  container.innerHTML += `
+                      <div class="rounded-2xl border border-white/5 bg-ow-panel/50 p-6 flex flex-col items-center justify-center text-slate-500 min-h-[300px]">
+                          <img src="${avatar}" class="h-16 w-16 rounded-full mb-3 opacity-50 grayscale">
+                          <h2 class="text-lg font-bold text-white/50">${username}</h2>
+                          <p class="text-xs text-center mt-2">快照数量不足<br>（V2.0 分析需至少跨越一天的两次快照，请明天再来看）</p>
+                      </div>
+                  `;
+                  return;
+              }
+
+              const o = p.overall;
+              const winRate = (safeDiv(o.wins, o.wins + o.losses) * 100).toFixed(1);
+              const kda = getKDA(o.elims, o.assists, o.deaths).toFixed(2);
+              const deathsPer10 = getPer10(o.deaths, o.time_played).toFixed(1);
+
+              let heroesHtml = '';
+              p.heroes.slice(0, 4).forEach(h => {
+                  const hTimeMin = (h.time_played / 60).toFixed(0);
+                  const hKda = getKDA(h.elims, h.assists, h.deaths).toFixed(1);
+                  const hDmg10 = getPer10(h.damage, h.time_played).toFixed(0);
+                  const hHeal10 = getPer10(h.healing, h.time_played).toFixed(0);
+                  
+                  heroesHtml += `
+                      <div class="grid grid-cols-4 gap-2 py-2 border-b border-white/5 text-[11px] items-center">
+                          <div class="font-bold text-slate-200 capitalize">${h.hero}</div>
+                          <div class="text-slate-400 text-center">${hTimeMin}m</div>
+                          <div class="text-ow-orange text-center font-mono">${hKda}</div>
+                          <div class="text-slate-400 text-right font-mono">${hDmg10} / ${hHeal10}</div>
+                      </div>
+                  `;
+              });
+
+              container.innerHTML += `
+                  <article class="flex flex-col rounded-3xl border border-white/10 bg-ow-panel p-5 shadow-2xl transition hover:border-ow-orange/50">
+                      <!-- 头部信息 -->
+                      <div class="flex items-center gap-4 mb-5 pb-5 border-b border-white/10">
+                          <img src="${avatar}" class="h-14 w-14 rounded-full border-2 border-white/10">
+                          <div>
+                              <h2 class="text-xl font-black text-white">${username}</h2>
+                              <p class="text-xs text-slate-400">近期游玩: ${(o.time_played/3600).toFixed(1)} 小时</p>
+                          </div>
+                      </div>
+
+                      <!-- 大盘 Delta 数据 -->
+                      <div class="grid grid-cols-3 gap-3 mb-6">
+                          <div class="bg-white/5 rounded-lg p-3 text-center">
+                              <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">近期胜率</p>
+                              <p class="text-lg font-black text-white">${winRate}%</p>
+                              <p class="text-[10px] text-slate-400 mt-0.5">${o.wins}胜 ${o.losses}负</p>
+                          </div>
+                          <div class="bg-white/5 rounded-lg p-3 text-center" title="(消灭+助攻)/阵亡。综合贡献黄金指标，3.0以上为优秀。">
+                              <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1 cursor-help border-b border-dotted border-slate-500 inline-block">真实KDA ❓</p>
+                              <p class="text-lg font-black text-ow-orange">${kda}</p>
+                          </div>
+                          <div class="bg-white/5 rounded-lg p-3 text-center" title="阵亡数/游玩时间(秒)*600。越低越好，活着才有输出，顶级玩家在5.0-6.0。">
+                              <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1 cursor-help border-b border-dotted border-slate-500 inline-block">阵亡/10m ❓</p>
+                              <p class="text-lg font-black text-rose-400">${deathsPer10}</p>
+                          </div>
+                      </div>
+
+                      <!-- 英雄列表 -->
+                      <div>
+                          <div class="grid grid-cols-4 gap-2 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                              <div>活跃英雄</div>
+                              <div class="text-center">时长</div>
+                              <div class="text-center">KDA</div>
+                              <div class="text-right" title="每10分钟伤害 / 每10分钟治疗。主输出看伤害，主奶看治疗。">
+                                  <span class="cursor-help border-b border-dotted border-slate-500">伤/疗 (10m) ❓</span>
+                              </div>
+                          </div>
+                          <div class="flex flex-col">
+                              ${heroesHtml || '<p class="text-xs text-slate-500 py-2">近期无有效英雄数据</p>'}
+                          </div>
+                      </div>
+                  </article>
+              `;
           });
-        }
-
-
-       // 构建英雄 HTML（修复版）
-        let heroesHtml = '<p class="text-xs text-slate-500 mt-2">No hero stats available</p>';
-        if (topHeroes.length > 0) {
-          heroesHtml = topHeroes.map(h => {
-            const hours = (h.value / 3600).toFixed(1);
-            return `
-              <div class="flex justify-between items-center py-1.5 border-b border-white/5 last:border-0">
-                <span class="text-sm font-medium capitalize text-slate-200">${h.hero}</span>
-                <div class="flex items-center gap-3">
-                  <span class="text-[10px] text-slate-400">Win ${h.winrate}%</span>
-                  <span class="text-xs text-ow-orange">${hours} h</span>
-                </div>
-              </div>
-            `;
-          }).join('');
-        }
-
-
-
-
-        return `
-          <article class="flex flex-col rounded-3xl border border-white/10 bg-ow-panel/80 p-6 shadow-2xl shadow-black/40 backdrop-blur transition-all hover:border-ow-orange/50">
-            <!-- 头部：头像与名称 -->
-            <div class="flex items-start gap-4 mb-6">
-              <img src="${summary.avatar || ''}" class="h-16 w-16 rounded-xl border border-white/10 object-cover shadow-lg bg-black/50" />
-              <div class="flex-1">
-                <h2 class="text-xl font-bold">${summary.username || player.battle_tag}</h2>
-                <p class="text-xs text-ow-orange mb-2">${summary.title || ''}</p>
-                <div class="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-2 py-0.5 text-[10px]">
-                  <span class="text-slate-400">Endorsement</span>
-                  <span class="font-semibold">${summary.endorsement?.level || '?'}</span>
-                </div>
-              </div>
-            </div>
-
-
-            <!-- 中部：竞技段位 -->
-            <div class="mb-6">
-              <h3 class="mb-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Competitive Ranks</h3>
-              <div class="grid grid-cols-3 gap-2">
-                ${ranksHtml}
-              </div>
-            </div>
-
-
-            <!-- 底部：最常玩英雄 -->
-            <div class="mt-auto pt-4 border-t border-white/10">
-              <h3 class="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Top Heroes (Time Played)</h3>
-              <div class="flex flex-col">
-                ${heroesHtml}
-              </div>
-            </div>
-          </article>
-        `;
       }
 
-
-      async function loadTeamData() {
-        const grid = document.getElementById("team-grid");
-        const loading = document.getElementById("loading");
-        const errorEl = document.getElementById("error");
-
-
-        try {
-          const response = await fetch('/api/data/team/latest');
-          if (!response.ok) throw new Error("Failed to fetch team data");
-          const team = await response.json();
-          
-          loading.classList.add("hidden");
-          errorEl.classList.add("hidden");
-          
-          grid.innerHTML = team.map(player => createPlayerCard(player)).join('');
-        } catch (error) {
-          loading.classList.add("hidden");
-          errorEl.classList.remove("hidden");
-          document.getElementById("error-message").textContent = error.message;
-        }
+      async function forceSync() {
+          const btn = document.getElementById("refreshBtn");
+          btn.innerHTML = "抓取中...";
+          btn.disabled = true;
+          try {
+              await fetch('/api/snapshot/team/all', { method: 'POST' });
+              alert("拉取成功！请等待明天系统产生第二条快照后，即可看到 Delta 差值分析。");
+              loadReport();
+          } catch(e) {
+              alert("拉取失败，请检查网络");
+          } finally {
+              btn.innerHTML = "强制拉取快照";
+              btn.disabled = false;
+          }
       }
 
-
-      async function refreshTeamData() {
-        const btn = document.getElementById("refreshBtn");
-        const text = document.getElementById("refreshText");
-        
-        btn.disabled = true;
-        text.textContent = "正在抓取...";
-        btn.classList.add("animate-pulse");
-
-
-        try {
-          // 调用 main.py 中已经写好的批量更新接口
-          await fetch('/api/snapshot/team/all', { method: 'POST' });
-          await loadTeamData();
-        } catch (error) {
-          alert("刷新失败，请查看控制台日志");
-        } finally {
-          btn.disabled = false;
-          text.textContent = "拉取最新数据";
-          btn.classList.remove("animate-pulse");
-        }
-      }
-
-
-      // 初始化加载
-      loadTeamData();
+      loadReport();
     </script>
-  </body>
+</body>
 </html>
