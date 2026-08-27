@@ -1,11 +1,11 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OW Team Tracker V2.0</title>
+    <title>OW Team Tracker V2.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -13,16 +13,20 @@
         }
       };
     </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f99e1a; }
+    </style>
 </head>
-<body class="min-h-screen bg-ow-ink text-slate-100 antialiased font-sans">
-    <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,158,26,0.1),_transparent_60%)]"></div>
+<body class="min-h-screen bg-ow-ink text-slate-100 antialiased font-sans overflow-x-hidden">
+    <div class="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,158,26,0.1),_transparent_60%)] z-0"></div>
 
-    <main class="relative mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      
-      <!-- Header & Controls -->
+    <main class="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <header class="mb-8 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-white/10 pb-6">
         <div>
-          <p class="text-xs font-bold uppercase tracking-[0.25em] text-ow-orange">Overwatch Tracker V2.0</p>
+          <p class="text-xs font-bold uppercase tracking-[0.25em] text-ow-orange">Overwatch Tracker V2.5</p>
           <h1 class="mt-2 text-3xl font-black tracking-tight sm:text-4xl">数据去水，战力溯源</h1>
         </div>
         <div class="flex items-center gap-3">
@@ -31,41 +35,128 @@
             <option value="7" selected>本周战报 (7 天)</option>
             <option value="30">月度总结 (30 天)</option>
           </select>
-          <button id="refreshBtn" onclick="forceSync()" class="bg-ow-orange hover:bg-orange-500 text-ow-ink px-4 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center gap-2">
+          <button id="refreshBtn" onclick="forceSync()" class="bg-ow-orange hover:bg-orange-500 text-ow-ink px-4 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(249,158,26,0.3)]">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
             强制拉取快照
           </button>
         </div>
       </header>
 
-      <!-- Awards Wall -->
       <section class="mb-10">
         <h2 class="text-lg font-bold mb-4 flex items-center gap-2"><span class="text-2xl">🏆</span> 本期“大王”颁奖台</h2>
-        <div id="awardsGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <!-- JS 渲染奖项 -->
-        </div>
+        <div id="awardsGrid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"></div>
       </section>
 
-      <!-- Players Grid -->
-      <section id="playersGrid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          <!-- JS 渲染卡片 -->
-      </section>
+      <section id="playersGrid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></section>
 
-      <!-- Loading State -->
       <div id="loading" class="hidden flex-col items-center justify-center py-20">
         <div class="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-ow-orange"></div>
         <p class="mt-4 text-slate-400 font-medium">引擎分析中...</p>
       </div>
-
     </main>
 
+    <!-- Modal -->
+    <div id="playerModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 opacity-0 transition-opacity duration-300">
+        <div class="bg-ow-panel border border-white/10 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl transform scale-95 transition-transform duration-300" id="modalContent">
+            
+            <div class="flex items-center justify-between p-5 border-b border-white/10 bg-white/5">
+                <div class="flex items-center gap-4">
+                    <img id="modalAvatar" src="" class="h-12 w-12 rounded-full border-2 border-ow-orange">
+                    <div>
+                        <h2 id="modalUsername" class="text-xl font-black text-white">Player Name</h2>
+                        <p id="modalPlayTime" class="text-xs text-ow-orange font-bold">近期游玩: 0 小时</p>
+                    </div>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white transition p-2 bg-white/5 rounded-lg hover:bg-rose-500/20 hover:text-rose-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex gap-6 px-6 pt-3 border-b border-white/10 bg-black/20">
+                <button onclick="switchTab('overview')" id="tab-overview" class="pb-3 border-b-2 border-ow-orange text-white font-bold transition-all text-sm">📊 综合与英雄</button>
+                <button onclick="switchTab('trend')" id="tab-trend" class="pb-3 border-b-2 border-transparent text-slate-400 hover:text-white transition-all text-sm">📈 历史趋势图</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1">
+                
+                <!-- 综合与英雄 Tab -->
+                <div id="overviewContainer" class="flex flex-col">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                        <div class="lg:col-span-1 bg-black/30 rounded-xl p-4 border border-white/5 flex flex-col items-center justify-center">
+                            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">打法风格画像</h3>
+                            <div class="w-full h-[220px] relative"><canvas id="radarChart"></canvas></div>
+                        </div>
+                        <div class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="bg-black/30 rounded-xl p-4 border border-white/5 flex flex-col justify-center">
+                                <span class="text-[10px] text-slate-500 uppercase mb-1">真·KDA (含金量)</span>
+                                <span id="modKda" class="text-2xl font-black text-ow-orange">0.0</span>
+                            </div>
+                            <div class="bg-black/30 rounded-xl p-4 border border-white/5 flex flex-col justify-center">
+                                <span class="text-[10px] text-slate-500 uppercase mb-1">生存评分 (越低越好)</span>
+                                <span id="modDeaths" class="text-2xl font-black text-emerald-400">0.0</span>
+                                <span class="text-[10px] text-slate-500 mt-1">阵亡/10min</span>
+                            </div>
+                            <div class="bg-black/30 rounded-xl p-4 border border-white/5 flex flex-col justify-center">
+                                <span class="text-[10px] text-slate-500 uppercase mb-1">真正击杀效率</span>
+                                <span id="modGuaSha" class="text-2xl font-black text-white">0</span>
+                                <span class="text-[10px] text-slate-500 mt-1">均次消灭所需伤害</span>
+                            </div>
+                            <div class="bg-black/30 rounded-xl p-4 border border-white/5 flex flex-col justify-center">
+                                <span class="text-[10px] text-slate-500 uppercase mb-1">参战率 (Assists/10m)</span>
+                                <span id="modAssists" class="text-2xl font-black text-white">0.0</span>
+                                <span class="text-[10px] text-slate-500 mt-1">助攻效率</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">本期全英雄火力拆解</h3>
+                        <div class="overflow-x-auto rounded-xl border border-white/10 bg-black/20">
+                            <table class="w-full text-left text-sm text-slate-300">
+                                <thead class="bg-white/5 text-xs uppercase text-slate-400">
+                                    <tr>
+                                        <th class="px-4 py-3 rounded-tl-xl">英雄</th>
+                                        <th class="px-4 py-3">时长</th>
+                                        <th class="px-4 py-3">胜率</th>
+                                        <th class="px-4 py-3">KDA</th>
+                                        <th class="px-4 py-3 text-right">伤害/10m</th>
+                                        <th class="px-4 py-3 text-right">治疗/10m</th>
+                                        <th class="px-4 py-3 text-right rounded-tr-xl">阵亡/10m</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modalHeroTable" class="divide-y divide-white/5"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 历史趋势 Tab -->
+                <div id="trendContainer" class="hidden flex-col gap-6">
+                    <div class="bg-black/30 rounded-xl p-5 border border-white/5">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">KDA & 生存走位趋势</h3>
+                        <div class="w-full h-[250px] relative"><canvas id="trendChart1"></canvas></div>
+                    </div>
+                    <div class="bg-black/30 rounded-xl p-5 border border-white/5">
+                        <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">输出与治疗效率 (每 10 分钟)</h3>
+                        <div class="w-full h-[250px] relative"><canvas id="trendChart2"></canvas></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <script>
+      let globalTeamData = [];
+      let radarChartInstance = null;
+      let trendChart1Instance = null;
+      let trendChart2Instance = null;
+
       function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
       function safeDiv(num, den) { return den > 0 ? num / den : 0; }
       function getPer10(val, time) { return safeDiv(val, time) * 600; }
       function getKDA(elims, assists, deaths) { return safeDiv(elims + assists, deaths > 0 ? deaths : 1); }
 
-      // 奖项图标映射
       const awardIcons = {
           "狗运小子（最佳胜率）": "🍀", "确实是会保活大王": "🛡️", "最爱回家大王": "💀",
           "本周小天使": "👼", "伤害确实是打满了大王": "💥", "真正的团队核心奉献之神": "🤝",
@@ -83,11 +174,11 @@
           try {
               const res = await fetch(`/api/report/${days}`);
               const data = await res.json();
+              globalTeamData = data.players;
               renderAwards(data.awards);
               renderPlayers(data.players);
           } catch(e) {
               console.error(e);
-              alert("数据加载失败");
           } finally {
               document.getElementById("loading").classList.add("hidden");
               document.getElementById("loading").classList.remove("flex");
@@ -101,7 +192,6 @@
               const icon = awardIcons[awardName] || "🏅";
               const isBad = ["最爱回家大王", "可能真的要等ELO了", "传奇刮痧大王"].includes(awardName);
               const colorClass = isBad ? "border-rose-900/50 bg-rose-950/20 text-rose-300" : "border-ow-orange/30 bg-ow-orange/10 text-ow-orange";
-              
               container.innerHTML += `
                   <div class="rounded-xl border ${colorClass} p-3 flex flex-col items-center justify-center text-center shadow-lg backdrop-blur-sm">
                       <div class="text-2xl mb-1">${icon}</div>
@@ -114,7 +204,6 @@
 
       function renderPlayers(players) {
           const container = document.getElementById("playersGrid");
-          
           players.forEach(p => {
               const username = p.summary.username || p.battle_tag;
               const avatar = p.summary.avatar || "";
@@ -124,7 +213,7 @@
                       <div class="rounded-2xl border border-white/5 bg-ow-panel/50 p-6 flex flex-col items-center justify-center text-slate-500 min-h-[300px]">
                           <img src="${avatar}" class="h-16 w-16 rounded-full mb-3 opacity-50 grayscale">
                           <h2 class="text-lg font-bold text-white/50">${username}</h2>
-                          <p class="text-xs text-center mt-2">快照数量不足<br>（V2.0 分析需至少跨越一天的两次快照，请明天再来看）</p>
+                          <p class="text-xs text-center mt-2">快照不足 (需等待次日产生对比差值)</p>
                       </div>
                   `;
                   return;
@@ -133,70 +222,212 @@
               const o = p.overall;
               const winRate = (safeDiv(o.wins, o.wins + o.losses) * 100).toFixed(1);
               const kda = getKDA(o.elims, o.assists, o.deaths).toFixed(2);
-              const deathsPer10 = getPer10(o.deaths, o.time_played).toFixed(1);
-
-              let heroesHtml = '';
-              p.heroes.slice(0, 4).forEach(h => {
-                  const hTimeMin = (h.time_played / 60).toFixed(0);
-                  const hKda = getKDA(h.elims, h.assists, h.deaths).toFixed(1);
-                  const hDmg10 = getPer10(h.damage, h.time_played).toFixed(0);
-                  const hHeal10 = getPer10(h.healing, h.time_played).toFixed(0);
-                  
-                  heroesHtml += `
-                      <div class="grid grid-cols-4 gap-2 py-2 border-b border-white/5 text-[11px] items-center">
-                          <div class="font-bold text-slate-200 capitalize">${h.hero}</div>
-                          <div class="text-slate-400 text-center">${hTimeMin}m</div>
-                          <div class="text-ow-orange text-center font-mono">${hKda}</div>
-                          <div class="text-slate-400 text-right font-mono">${hDmg10} / ${hHeal10}</div>
-                      </div>
-                  `;
-              });
-
+              
               container.innerHTML += `
-                  <article class="flex flex-col rounded-3xl border border-white/10 bg-ow-panel p-5 shadow-2xl transition hover:border-ow-orange/50">
-                      <!-- 头部信息 -->
-                      <div class="flex items-center gap-4 mb-5 pb-5 border-b border-white/10">
-                          <img src="${avatar}" class="h-14 w-14 rounded-full border-2 border-white/10">
-                          <div>
-                              <h2 class="text-xl font-black text-white">${username}</h2>
-                              <p class="text-xs text-slate-400">近期游玩: ${(o.time_played/3600).toFixed(1)} 小时</p>
-                          </div>
-                      </div>
-
-                      <!-- 大盘 Delta 数据 -->
-                      <div class="grid grid-cols-3 gap-3 mb-6">
-                          <div class="bg-white/5 rounded-lg p-3 text-center">
-                              <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">近期胜率</p>
-                              <p class="text-lg font-black text-white">${winRate}%</p>
-                              <p class="text-[10px] text-slate-400 mt-0.5">${o.wins}胜 ${o.losses}负</p>
-                          </div>
-                          <div class="bg-white/5 rounded-lg p-3 text-center" title="(消灭+助攻)/阵亡。综合贡献黄金指标，3.0以上为优秀。">
-                              <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1 cursor-help border-b border-dotted border-slate-500 inline-block">真实KDA ❓</p>
-                              <p class="text-lg font-black text-ow-orange">${kda}</p>
-                          </div>
-                          <div class="bg-white/5 rounded-lg p-3 text-center" title="阵亡数/游玩时间(秒)*600。越低越好，活着才有输出，顶级玩家在5.0-6.0。">
-                              <p class="text-[10px] text-slate-500 uppercase tracking-wider mb-1 cursor-help border-b border-dotted border-slate-500 inline-block">阵亡/10m ❓</p>
-                              <p class="text-lg font-black text-rose-400">${deathsPer10}</p>
-                          </div>
-                      </div>
-
-                      <!-- 英雄列表 -->
-                      <div>
-                          <div class="grid grid-cols-4 gap-2 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                              <div>活跃英雄</div>
-                              <div class="text-center">时长</div>
-                              <div class="text-center">KDA</div>
-                              <div class="text-right" title="每10分钟伤害 / 每10分钟治疗。主输出看伤害，主奶看治疗。">
-                                  <span class="cursor-help border-b border-dotted border-slate-500">伤/疗 (10m) ❓</span>
+                  <article class="flex flex-col rounded-3xl border border-white/10 bg-ow-panel p-5 shadow-2xl transition hover:border-ow-orange/50 group">
+                      <div class="flex items-center justify-between mb-5 pb-5 border-b border-white/10">
+                          <div class="flex items-center gap-4">
+                              <img src="${avatar}" class="h-14 w-14 rounded-full border-2 border-white/10 group-hover:border-ow-orange transition-colors">
+                              <div>
+                                  <h2 class="text-xl font-black text-white">${username}</h2>
+                                  <p class="text-xs text-slate-400">近期胜率: <span class="${winRate >= 50 ? 'text-emerald-400' : 'text-rose-400'} font-bold">${winRate}%</span></p>
                               </div>
                           </div>
-                          <div class="flex flex-col">
-                              ${heroesHtml || '<p class="text-xs text-slate-500 py-2">近期无有效英雄数据</p>'}
+                          <button onclick="openModal('${p.battle_tag}')" class="bg-white/5 hover:bg-ow-orange hover:text-ow-ink text-slate-300 p-2.5 rounded-xl transition-all text-xs font-bold flex flex-col items-center gap-1">
+                              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                              深度分析
+                          </button>
+                      </div>
+                      <div class="grid grid-cols-2 gap-3 mb-4">
+                          <div class="bg-white/5 rounded-lg p-3 text-center">
+                              <p class="text-[10px] text-slate-500 uppercase mb-1">真实KDA</p>
+                              <p class="text-2xl font-black text-ow-orange">${kda}</p>
+                          </div>
+                          <div class="bg-white/5 rounded-lg p-3 text-center">
+                              <p class="text-[10px] text-slate-500 uppercase mb-1">游玩时长</p>
+                              <p class="text-2xl font-black text-white">${(o.time_played/3600).toFixed(1)}<span class="text-sm font-normal text-slate-500 ml-1">h</span></p>
                           </div>
                       </div>
                   </article>
               `;
           });
+      }
+
+      function switchTab(tab) {
+          if(tab === 'overview') {
+              document.getElementById('overviewContainer').classList.remove('hidden');
+              document.getElementById('overviewContainer').classList.add('flex');
+              document.getElementById('trendContainer').classList.add('hidden');
+              document.getElementById('trendContainer').classList.remove('flex');
+              
+              document.getElementById('tab-overview').classList.replace('border-transparent', 'border-ow-orange');
+              document.getElementById('tab-overview').classList.replace('text-slate-400', 'text-white');
+              document.getElementById('tab-trend').classList.replace('border-ow-orange', 'border-transparent');
+              document.getElementById('tab-trend').classList.replace('text-white', 'text-slate-400');
+          } else {
+              document.getElementById('overviewContainer').classList.add('hidden');
+              document.getElementById('overviewContainer').classList.remove('flex');
+              document.getElementById('trendContainer').classList.remove('hidden');
+              document.getElementById('trendContainer').classList.add('flex');
+              
+              document.getElementById('tab-trend').classList.replace('border-transparent', 'border-ow-orange');
+              document.getElementById('tab-trend').classList.replace('text-slate-400', 'text-white');
+              document.getElementById('tab-overview').classList.replace('border-ow-orange', 'border-transparent');
+              document.getElementById('tab-overview').classList.replace('text-white', 'text-slate-400');
+          }
+      }
+
+      function openModal(battleTag) {
+          const player = globalTeamData.find(p => p.battle_tag === battleTag);
+          if (!player) return;
+          const o = player.overall;
+          
+          document.getElementById('modalAvatar').src = player.summary.avatar || '';
+          document.getElementById('modalUsername').innerText = player.summary.username || battleTag;
+          document.getElementById('modalPlayTime').innerText = `近期打卡时长: ${(o.time_played/3600).toFixed(1)} 小时 (${o.wins}胜 ${o.losses}负)`;
+
+          document.getElementById('modKda').innerText = getKDA(o.elims, o.assists, o.deaths).toFixed(2);
+          document.getElementById('modDeaths').innerText = getPer10(o.deaths, o.time_played).toFixed(1);
+          document.getElementById('modGuaSha').innerText = safeDiv(o.damage, o.elims).toFixed(0);
+          document.getElementById('modAssists').innerText = getPer10(o.assists, o.time_played).toFixed(1);
+
+          drawRadarChart(o);
+          
+          const tbody = document.getElementById('modalHeroTable');
+          tbody.innerHTML = '';
+          player.heroes.forEach(h => {
+              const hWinRate = safeDiv(h.wins, h.wins + h.losses) * 100;
+              const wrColor = hWinRate >= 50 ? 'text-emerald-400' : 'text-rose-400';
+              tbody.innerHTML += `
+                  <tr class="hover:bg-white/5 transition-colors">
+                      <td class="px-4 py-3 font-bold text-white capitalize flex items-center gap-2">${h.hero}</td>
+                      <td class="px-4 py-3 text-slate-400">${(h.time_played / 60).toFixed(0)} min</td>
+                      <td class="px-4 py-3 font-bold ${wrColor}">${h.wins}W - ${h.losses}L (${hWinRate.toFixed(0)}%)</td>
+                      <td class="px-4 py-3 font-mono text-ow-orange">${getKDA(h.elims, h.assists, h.deaths).toFixed(2)}</td>
+                      <td class="px-4 py-3 font-mono text-right text-slate-300">${getPer10(h.damage, h.time_played).toFixed(0)}</td>
+                      <td class="px-4 py-3 font-mono text-right text-emerald-200">${getPer10(h.healing, h.time_played).toFixed(0)}</td>
+                      <td class="px-4 py-3 font-mono text-right text-rose-300">${getPer10(h.deaths, h.time_played).toFixed(1)}</td>
+                  </tr>
+              `;
+          });
+
+          switchTab('overview');
+          loadTrend(battleTag);
+
+          const modal = document.getElementById('playerModal');
+          const content = document.getElementById('modalContent');
+          modal.classList.remove('hidden');
+          void modal.offsetWidth; 
+          modal.classList.remove('opacity-0');
+          content.classList.remove('scale-95');
+      }
+
+      function closeModal() {
+          const modal = document.getElementById('playerModal');
+          const content = document.getElementById('modalContent');
+          modal.classList.add('opacity-0');
+          content.classList.add('scale-95');
+          setTimeout(() => { modal.classList.add('hidden'); }, 300);
+      }
+
+      function drawRadarChart(o) {
+          const ctx = document.getElementById('radarChart').getContext('2d');
+          if (radarChartInstance) radarChartInstance.destroy();
+
+          const elimScore = getPer10(o.elims, o.time_played); 
+          const assistScore = getPer10(o.assists, o.time_played);
+          const dmgScore = getPer10(o.damage, o.time_played) / 500; 
+          const healScore = getPer10(o.healing, o.time_played) / 500; 
+          let surviveScore = (15 - getPer10(o.deaths, o.time_played)) * 2; 
+          if (surviveScore < 0) surviveScore = 0;
+
+          radarChartInstance = new Chart(ctx, {
+              type: 'radar',
+              data: {
+                  labels: ['击杀爆发', '助攻效率', '伤害压制', '治疗贡献', '生存走位'],
+                  datasets: [{
+                      label: '近期能力值',
+                      data: [elimScore, assistScore, dmgScore, healScore, surviveScore],
+                      backgroundColor: 'rgba(249, 158, 26, 0.2)',
+                      borderColor: 'rgba(249, 158, 26, 1)',
+                      pointBackgroundColor: '#fff',
+                      pointBorderColor: '#f99e1a',
+                      borderWidth: 2,
+                  }]
+              },
+              options: {
+                  responsive: true, maintainAspectRatio: false,
+                  scales: {
+                      r: {
+                          angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                          grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                          pointLabels: { color: '#94a3b8', font: { size: 10, family: 'Inter' } },
+                          ticks: { display: false, min: 0, max: 25 }
+                      }
+                  },
+                  plugins: { legend: { display: false }, tooltip: { enabled: false } }
+              }
+          });
+      }
+
+      async function loadTrend(battleTag) {
+          try {
+              const res = await fetch(`/api/trend/${encodeURIComponent(battleTag)}`);
+              const trends = await res.json();
+              
+              if(trends.length === 0) return;
+
+              const labels = trends.map(t => t.date);
+              
+              // Chart 1: KDA vs Deaths
+              const ctx1 = document.getElementById('trendChart1').getContext('2d');
+              if (trendChart1Instance) trendChart1Instance.destroy();
+              trendChart1Instance = new Chart(ctx1, {
+                  type: 'line',
+                  data: {
+                      labels: labels,
+                      datasets: [
+                          { label: '真实KDA', data: trends.map(t => t.kda), borderColor: '#f99e1a', backgroundColor: 'rgba(249,158,26,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
+                          { label: '阵亡/10m', data: trends.map(t => t.deaths_10), borderColor: '#f43f5e', backgroundColor: 'transparent', borderDash: [5, 5], tension: 0.3, yAxisID: 'y1' }
+                      ]
+                  },
+                  options: {
+                      responsive: true, maintainAspectRatio: false,
+                      interaction: { mode: 'index', intersect: false },
+                      scales: {
+                          x: { grid: { display: false, color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                          y: { type: 'linear', display: true, position: 'left', grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#f99e1a' } },
+                          y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f43f5e' } }
+                      },
+                      plugins: { legend: { labels: { color: '#cbd5e1' } } }
+                  }
+              });
+
+              // Chart 2: Dmg vs Heal
+              const ctx2 = document.getElementById('trendChart2').getContext('2d');
+              if (trendChart2Instance) trendChart2Instance.destroy();
+              trendChart2Instance = new Chart(ctx2, {
+                  type: 'line',
+                  data: {
+                      labels: labels,
+                      datasets: [
+                          { label: '伤害/10m', data: trends.map(t => t.dmg_10), borderColor: '#38bdf8', backgroundColor: 'transparent', tension: 0.3 },
+                          { label: '治疗/10m', data: trends.map(t => t.heal_10), borderColor: '#34d399', backgroundColor: 'transparent', tension: 0.3 }
+                      ]
+                  },
+                  options: {
+                      responsive: true, maintainAspectRatio: false,
+                      interaction: { mode: 'index', intersect: false },
+                      scales: {
+                          x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+                          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#cbd5e1' } }
+                      },
+                      plugins: { legend: { labels: { color: '#cbd5e1' } } }
+                  }
+              });
+          } catch(e) {
+              console.error("加载趋势失败", e);
+          }
       }
 
       async function forceSync() {
@@ -205,10 +436,10 @@
           btn.disabled = true;
           try {
               await fetch('/api/snapshot/team/all', { method: 'POST' });
-              alert("拉取成功！请等待明天系统产生第二条快照后，即可看到 Delta 差值分析。");
+              alert("强制拉取完成！无变动数据已被自动拦截。");
               loadReport();
           } catch(e) {
-              alert("拉取失败，请检查网络");
+              alert("网络异常");
           } finally {
               btn.innerHTML = "强制拉取快照";
               btn.disabled = false;
