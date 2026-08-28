@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OW Team Tracker V2.5</title>
+    <title>OW Team Tracker V2.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
@@ -223,9 +223,25 @@
               const winRate = (safeDiv(o.wins, o.wins + o.losses) * 100).toFixed(1);
               const kda = getKDA(o.elims, o.assists, o.deaths).toFixed(2);
               
+              // 🌟 这里是我们加回来的 Top 3 英雄预览代码 🌟
+              let heroesPreviewHtml = '';
+              p.heroes.slice(0, 3).forEach(h => {
+                  const hTimeMin = (h.time_played / 60).toFixed(0);
+                  const hKda = getKDA(h.elims, h.assists, h.deaths).toFixed(1);
+                  heroesPreviewHtml += `
+                      <div class="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0 text-[11px]">
+                          <div class="font-bold text-slate-200">${h.hero}</div>
+                          <div class="flex items-center gap-3">
+                              <span class="text-slate-500">${hTimeMin}m</span>
+                              <span class="text-ow-orange font-mono font-bold w-6 text-right">${hKda}</span>
+                          </div>
+                      </div>
+                  `;
+              });
+
               container.innerHTML += `
                   <article class="flex flex-col rounded-3xl border border-white/10 bg-ow-panel p-5 shadow-2xl transition hover:border-ow-orange/50 group">
-                      <div class="flex items-center justify-between mb-5 pb-5 border-b border-white/10">
+                      <div class="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
                           <div class="flex items-center gap-4">
                               <img src="${avatar}" class="h-14 w-14 rounded-full border-2 border-white/10 group-hover:border-ow-orange transition-colors">
                               <div>
@@ -238,6 +254,7 @@
                               深度分析
                           </button>
                       </div>
+
                       <div class="grid grid-cols-2 gap-3 mb-4">
                           <div class="bg-white/5 rounded-lg p-3 text-center">
                               <p class="text-[10px] text-slate-500 uppercase mb-1">真实KDA</p>
@@ -248,10 +265,22 @@
                               <p class="text-2xl font-black text-white">${(o.time_played/3600).toFixed(1)}<span class="text-sm font-normal text-slate-500 ml-1">h</span></p>
                           </div>
                       </div>
+
+                      <!-- 🌟 重新渲染出英雄预览 🌟 -->
+                      <div class="bg-black/20 rounded-xl p-3 border border-white/5 flex-1">
+                          <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-2 flex justify-between">
+                              <span>近期主玩 (Top 3)</span>
+                              <span>KDA</span>
+                          </div>
+                          <div class="flex flex-col">
+                              ${heroesPreviewHtml || '<p class="text-xs text-slate-500 py-2 text-center">暂无英雄数据</p>'}
+                          </div>
+                      </div>
                   </article>
               `;
           });
       }
+
 
       function switchTab(tab) {
           if(tab === 'overview') {

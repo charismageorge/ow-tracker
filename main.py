@@ -218,11 +218,17 @@ def get_team_report(days: int = 7):
             heroes_b = stats_b.get("heroes", {}); heroes_a = stats_a.get("heroes", {})
             hero_deltas = []
             
+            # 读取配置表中的中文映射
+            hero_mapping = config.get("HERO_MAPPING", {})
+            
             for h_name, h_data_b in heroes_b.items():
                 h_data_a = heroes_a.get(h_name)
                 hd = calc_delta(h_data_b, h_data_a)
                 if hd:
-                    hd["hero"] = h_name
+                    # 使用 get()，如果找不到映射就返回首字母大写的原名
+                    cn_name = hero_mapping.get(h_name, h_name.capitalize())
+                    hd["hero"] = cn_name
+                    hd["hero_en"] = h_name # 保留英文名，前端如果想加载头像可以用
                     hero_deltas.append(hd)
                     
             hero_deltas.sort(key=lambda x: x["time_played"], reverse=True)

@@ -8,3 +8,13 @@ services:
       - "8000:8000"
     command: sh -c 'pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000 --reload'
     restart: unless-stopped
+
+  # 🌟 新增的 Cloudflare 临时隧道服务 🌟
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ow-cloudflared
+    restart: unless-stopped
+    # 这里的 url 必须和上面的服务名 (ow-tracker) 以及内部端口 (8000) 对应
+    command: tunnel --no-autoupdate --url http://ow-tracker:8000
+    depends_on:
+      - ow-tracker
