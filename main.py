@@ -3,16 +3,36 @@ import json
 import os
 from datetime import datetime, timedelta, timezone as dt_timezone
 from contextlib import asynccontextmanager
+import subprocess
+
 
 import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles  # 👈 新增引入
+
 
 # 核心配置
+APP_VERSION = "V2.7"  # 👈 统一版本号管理
 DB_PATH = "ow_data.db"
 CONFIG_PATH = "config.json"
 LOCAL_TZ = "America/Los_Angeles" # 强行锁定加州时间
+
+
+# --- 英雄职业字典（用于一拆三） ---
+ROLE_MAP = {
+    "tank": ["dva", "doomfist", "junker-queen", "mauga", "orisa", "ramattra", "reinhardt", "roadhog", "sigma", "winston", "wrecking-ball", "zarya"],
+    "damage": ["ashe", "bastion", "cassidy", "echo", "genji", "hanzo", "junkrat", "mei", "pharah", "reaper", "sojourn", "soldier-76", "sombra", "symmetra", "torbjorn", "tracer", "venture", "widowmaker"],
+    "support": ["ana", "baptiste", "brigitte", "illari", "kiriko", "lifeweaver", "lucio", "mercy", "moira", "zenyatta"]
+}
+
+
+def get_role(hero_en):
+    for role, heroes in ROLE_MAP.items():
+        if hero_en in heroes: return role
+    return "damage" # 默认防错
+
 
 # 动态读取配置文件
 def load_config():
@@ -21,7 +41,9 @@ def load_config():
             return json.load(f)
     return {"TEAM_MEMBERS": [], "WXPUSHER_APP_TOKEN": "", "WXPUSHER_UIDS": []}
 
+
 scheduler = BackgroundScheduler(timezone=LOCAL_TZ)
+
 
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
@@ -35,6 +57,7 @@ def init_db():
         ''')
         conn.commit()
 
+
 # --- 核心抓取逻辑 (带智能去重) ---
 def fetch_and_save_all_sync():
     config = load_config()
@@ -45,6 +68,7 @@ def fetch_and_save_all_sync():
         print("⚠️ 未在 config.json 中找到队伍名单。")
         return
 
+
     with httpx.Client(timeout=30.0) as client:
         for tag in team_members:
             try:
@@ -52,11 +76,13 @@ def fetch_and_save_all_sync():
                 sum_res = client.get(f"https://overfast-api.tekrop.fr/players/{formatted_tag}/summary")
                 stat_res = client.get(f"https://overfast-api.tekrop.fr/players/{formatted_tag}/stats/summary")
 
+
                 if sum_res.status_code == 200 and stat_res.status_code == 200:
                     summary_data = sum_res.json()
                     stats_data = stat_res.json()
                     
                     new_time = stats_data.get("general", {}).get("time_played", 0)
+
 
                     with sqlite3.connect(DB_PATH) as conn:
                         row = conn.execute("SELECT raw_data FROM snapshots WHERE battle_tag=? ORDER BY timestamp DESC LIMIT 1", (tag,)).fetchone()
@@ -67,6 +93,7 @@ def fetch_and_save_all_sync():
                             if new_time == last_time:
                                 print(f"⏩ {tag} 数据无变动，跳过入库。")
                                 continue
+
 
                         payload = {"summary": summary_data, "stats": stats_data}
                         conn.execute(
@@ -80,16 +107,19 @@ def fetch_and_save_all_sync():
             except Exception as e:
                 print(f"❌ {tag} 抓取异常: {e}")
 
-# --- V2.5 微信推送逻辑 ---
+
+# --- 微信推送逻辑 ---
 def send_wechat_report_sync():
     print(f"[{datetime.now()}] 📱 准备发送微信车队战报...")
     config = load_config()
     app_token = config.get("WXPUSHER_APP_TOKEN", "")
     uids = config.get("WXPUSHER_UIDS", [])
 
+
     if not app_token or not uids:
         print("⚠️ 缺少 WxPusher Token 或 UID 配置，取消发送")
         return
+
 
     report_data = get_team_report(days=7)
     awards = report_data.get("awards", {})
@@ -98,8 +128,10 @@ def send_wechat_report_sync():
         print("无战报数据，取消发送")
         return
 
-    content = f"""# 🏆 OW车队战力简报
+
+    content = f"""# 🏆 OW车队战力简报 ({APP_VERSION})
 > 数据周期：过去 7 天
+
 
 🥇 狗运小子（最佳胜率）：**{awards.get('狗运小子（最佳胜率）', '无')}**
 🛡️ 确实是会保活大王：**{awards.get('确实是会保活大王', '无')}**
@@ -113,8 +145,10 @@ def send_wechat_report_sync():
 📉 可能要等ELO了：**{awards.get('可能真的要等ELO了', '无')}**
 🎮 应该就没在上班：**{awards.get('应该就没在上班', '无')}**
 
-👉 详情请登录群晖 Dashboard 查看各英雄战力变化。
+
+👉 详情请查看最新静态周报看板。
 """
+
 
     payload = {
         "appToken": app_token,
@@ -130,30 +164,62 @@ def send_wechat_report_sync():
     except Exception as e:
         print(f"❌ 微信推送失败: {e}")
 
+
+# --- 新增：静态页面导出与 Git 自动推送引擎 ---
+def export_and_push_static():
+    print(f"[{datetime.now()}] 📦 开始打包生成静态周报...")
+    report_data = get_team_report(days=7)
+    
+    os.makedirs("docs/data", exist_ok=True)
+    with open("docs/data/latest.json", "w", encoding="utf-8") as f:
+        json.dump(report_data, f, ensure_ascii=False)
+        
+    print(f"[{datetime.now()}] 🚀 开始推送到 GitHub Pages...")
+    try:
+        subprocess.run(["git", "add", "docs/"], check=True)
+        subprocess.run(["git", "commit", "-m", f"docs: auto generate weekly report {datetime.now().strftime('%Y-%m-%d')} ({APP_VERSION})"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("✅ 静态网页已成功更新至 GitHub！")
+    except Exception as e:
+        print(f"❌ Git 推送失败，请检查 NAS 凭据: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # 确保文件夹存在，防止挂载报错
+    os.makedirs("docs/data", exist_ok=True)
+    
     scheduler.add_job(fetch_and_save_all_sync, 'cron', hour=4, minute=0)
     scheduler.add_job(send_wechat_report_sync, 'cron', day_of_week='sun', hour=20, minute=0)
+    scheduler.add_job(export_and_push_static, 'cron', day_of_week='sun', hour=20, minute=5)
     scheduler.start()
     yield
     scheduler.shutdown()
 
-app = FastAPI(title="OW Tracker V2.5", lifespan=lifespan)
+
+app = FastAPI(title=f"OW Tracker {APP_VERSION}", lifespan=lifespan)
+
+
+# 👈 核心修正：挂载数据目录供前端拉取
+app.mount("/data", StaticFiles(directory="docs/data"), name="data")
 
 @app.get("/")
 def root():
-    return FileResponse("index.html")
+    return FileResponse("docs/index.html")
+
 
 @app.post("/api/snapshot/team/all")
 def manual_snapshot():
     fetch_and_save_all_sync()
     return {"status": "success", "message": "已尝试抓取，无变动数据将被自动过滤"}
 
+
 @app.post("/api/test_wechat")
 def test_wechat_push():
     send_wechat_report_sync()
     return {"status": "success", "message": "已触发微信推送"}
+
 
 # --- Delta 分析引擎 ---
 def calc_delta(b, a):
@@ -161,11 +227,13 @@ def calc_delta(b, a):
     d_time = time_b - time_a
     if d_time <= 0: return None
 
+
     wins_b = b.get("games_won", 0); wins_a = a.get("games_won", 0) if a else 0
     loss_b = b.get("games_lost", 0); loss_a = a.get("games_lost", 0) if a else 0
     tot_b = b.get("total", {}); tot_a = a.get("total", {}) if a else {}
     
     def d(key): return max(0, tot_b.get(key, 0) - tot_a.get(key, 0))
+
 
     return {
         "time_played": d_time,
@@ -178,6 +246,7 @@ def calc_delta(b, a):
         "healing": d("healing")
     }
 
+
 @app.get("/api/report/{days}")
 def get_team_report(days: int = 7):
     target_time = (datetime.now(dt_timezone.utc) - timedelta(days=days)).isoformat()
@@ -187,6 +256,7 @@ def get_team_report(days: int = 7):
     config = load_config()
     team_members = config.get("TEAM_MEMBERS", [])
 
+
     with sqlite3.connect(DB_PATH) as conn:
         for tag in team_members:
             row_b = conn.execute("SELECT id, raw_data, timestamp FROM snapshots WHERE battle_tag=? ORDER BY timestamp DESC LIMIT 1", (tag,)).fetchone()
@@ -194,6 +264,7 @@ def get_team_report(days: int = 7):
             
             if not row_a:
                 row_a = conn.execute("SELECT id, raw_data, timestamp FROM snapshots WHERE battle_tag=? ORDER BY timestamp ASC LIMIT 1", (tag,)).fetchone()
+
 
             if not row_b: continue
             
@@ -208,39 +279,61 @@ def get_team_report(days: int = 7):
             stats_b = data_b.get("stats", {})
             stats_a = data_a.get("stats", {})
 
+
             gen_b = stats_b.get("general", {}); gen_a = stats_a.get("general", {})
             overall_delta = calc_delta(gen_b, gen_a)
+
 
             if not overall_delta:
                 team_data.append({"battle_tag": tag, "summary": summary, "has_delta": False})
                 continue
 
+
             heroes_b = stats_b.get("heroes", {}); heroes_a = stats_a.get("heroes", {})
             hero_deltas = []
+
+
+            role_stats = {
+                "tank": {"time_played":0, "elims":0, "deaths":0, "damage":0, "healing":0, "assists":0},
+                "damage": {"time_played":0, "elims":0, "deaths":0, "damage":0, "healing":0, "assists":0},
+                "support": {"time_played":0, "elims":0, "deaths":0, "damage":0, "healing":0, "assists":0}
+            }
             
-            # 读取配置表中的中文映射
             hero_mapping = config.get("HERO_MAPPING", {})
             
             for h_name, h_data_b in heroes_b.items():
                 h_data_a = heroes_a.get(h_name)
                 hd = calc_delta(h_data_b, h_data_a)
                 if hd:
-                    # 使用 get()，如果找不到映射就返回首字母大写的原名
+                    role = get_role(h_name)
+                    
+                    for k in role_stats[role].keys():
+                        role_stats[role][k] += hd.get(k, 0)
+
+
                     cn_name = hero_mapping.get(h_name, h_name.capitalize())
                     hd["hero"] = cn_name
-                    hd["hero_en"] = h_name # 保留英文名，前端如果想加载头像可以用
+                    hd["hero_en"] = h_name 
+                    hd["role"] = role      
                     hero_deltas.append(hd)
                     
             hero_deltas.sort(key=lambda x: x["time_played"], reverse=True)
             
             player_deltas[tag] = overall_delta
+            
+            vods = config.get("VODS", {}).get(tag, [])
+
+
             team_data.append({
                 "battle_tag": tag,
                 "summary": summary,
                 "has_delta": True,
                 "overall": overall_delta,
-                "heroes": hero_deltas
+                "role_stats": role_stats,
+                "heroes": hero_deltas,
+                "vods": vods 
             })
+
 
     # 颁发大王
     awards = {}
@@ -249,6 +342,7 @@ def get_team_report(days: int = 7):
             candidates = {t: metric_fn(d) for t, d in player_deltas.items() if d["time_played"] >= min_time}
             if not candidates: return "无（未满足出场时长）"
             return sorted(candidates.items(), key=lambda x: x[1], reverse=reverse)[0][0]
+
 
         awards["狗运小子（最佳胜率）"] = get_winner(lambda d: d["wins"] / max(1, d["wins"]+d["losses"]), reverse=True)
         awards["确实是会保活大王"] = get_winner(lambda d: (d["deaths"] / d["time_played"]) * 600, reverse=False)
@@ -262,7 +356,9 @@ def get_team_report(days: int = 7):
         awards["可能真的要等ELO了"] = get_winner(lambda d: d["losses"], reverse=True)
         awards["应该就没在上班"] = get_winner(lambda d: d["time_played"], reverse=True, min_time=0)
 
+
     return {"period": days, "players": team_data, "awards": awards}
+
 
 # --- 趋势 API ---
 @app.get("/api/trend/{battle_tag}")
@@ -281,7 +377,6 @@ def get_player_trend(battle_tag: str, days: int = 14):
         
         delta = calc_delta(curr_data, prev_data)
         if delta and delta["time_played"] > 60:
-            # 格式化时间为 MM-DD HH:MM
             date_str = curr_time[5:10] + " " + curr_time[11:16]
             
             elims = delta["elims"]
