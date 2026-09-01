@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles  # 👈 新增引入
 
 
 # 核心配置
-APP_VERSION = "V2.7"  # 👈 统一版本号管理
+APP_VERSION = "V2.8"  # 👈 统一版本号管理
 DB_PATH = "ow_data.db"
 CONFIG_PATH = "config.json"
 LOCAL_TZ = "America/Los_Angeles" # 强行锁定加州时间
@@ -175,13 +175,45 @@ def export_and_push_static():
         json.dump(report_data, f, ensure_ascii=False)
         
     print(f"[{datetime.now()}] 🚀 开始推送到 GitHub Pages...")
+    
+    config = load_config()
+    gh_token = config.get("GITHUB_TOKEN")
+    gh_repo = config.get("GITHUB_REPO")
+    
+    if not gh_token or not gh_repo:
+        print("❌ 缺少 GITHUB_TOKEN 或 GITHUB_REPO 配置，取消自动推送。")
+        return
+
     try:
+        # 1. 解决 Docker 挂载目录的所有权安全拦截
+        subprocess.run(["git", "config", "--global", "--add", "safe.directory", "/app"], check=True)
+        
+        # 2. 配置机器人的 Git 提交身份
+        subprocess.run(["git", "config", "--global", "user.email", "bot@owtracker.com"], check=True)
+        subprocess.run(["git", "config", "--global", "user.name", "OW Tracker Bot"], check=True)
+        
+        # 3. 绑定带 Token 的鉴权地址 (静默免密推送)
+        remote_url = f"https://{gh_token}@github.com/{gh_repo}.git"
+        subprocess.run(["git", "remote", "set-url", "origin", remote_url], check=True)
+        
+        # 4. 暂存 docs 文件夹
         subprocess.run(["git", "add", "docs/"], check=True)
-        subprocess.run(["git", "commit", "-m", f"docs: auto generate weekly report {datetime.now().strftime('%Y-%m-%d')} ({APP_VERSION})"], check=True)
-        subprocess.run(["git", "push"], check=True)
-        print("✅ 静态网页已成功更新至 GitHub！")
+        
+        # 5. 检查变动，无变动直接跳过
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        if not status.stdout.strip():
+            print("⏩ 本周数据无变化，跳过 GitHub 推送。")
+            return
+            
+        # 6. 提交并推送至主分支
+        subprocess.run(["git", "commit", "-m", f"docs: auto generate daily report {datetime.now().strftime('%Y-%m-%d')} ({APP_VERSION})"], check=True)
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("✅ 静态网页数据已成功更新至 GitHub！")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Git 命令执行失败 (退出码 {e.returncode}): {e}")
     except Exception as e:
-        print(f"❌ Git 推送失败，请检查 NAS 凭据: {e}")
+        print(f"❌ 未知错误: {e}")
 
 
 @asynccontextmanager
@@ -192,7 +224,7 @@ async def lifespan(app: FastAPI):
     
     scheduler.add_job(fetch_and_save_all_sync, 'cron', hour=4, minute=0)
     scheduler.add_job(send_wechat_report_sync, 'cron', day_of_week='sun', hour=20, minute=0)
-    scheduler.add_job(export_and_push_static, 'cron', day_of_week='sun', hour=20, minute=5)
+    scheduler.add_job(export_and_push_static, 'cron', hour=4, minute=5)
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -349,7 +381,7 @@ def get_team_report(days: int = 7):
         awards["最爱回家大王"] = get_winner(lambda d: (d["deaths"] / d["time_played"]) * 600, reverse=True)
         awards["本周小天使"] = get_winner(lambda d: (d["healing"] / d["time_played"]) * 600, reverse=True)
         awards["伤害确实是打满了大王"] = get_winner(lambda d: (d["damage"] / d["time_played"]) * 600, reverse=True)
-        awards["真正的团队核心奉献之神"] = get_winner(lambda d: (d["assists"] / d["time_played"]) * 600, reverse=True)
+        awards["真正的团队核心奉献之神"] = get_winner(lambda d: ((d["elims"] + d["assists"]) / d["time_played"]) * 600, reverse=True)
         awards["传奇刮痧大王"] = get_winner(lambda d: d["damage"] / max(1, d["elims"]), reverse=True)
         awards["人头狗"] = get_winner(lambda d: d["damage"] / max(1, d["elims"]), reverse=False)
         awards["真·杀意很大"] = get_winner(lambda d: (d["elims"] / d["time_played"]) * 600, reverse=True)
