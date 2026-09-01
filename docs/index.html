@@ -523,7 +523,7 @@
 
 
           const elimScore = getPer10(o.elims, o.time_played);
-          const assistScore = getPer10(o.elims + o.assists, o.time_played) * 0.6;
+          const assistScore = getPer10(o.elims + o.assists, o.time_played);
           const dmgScore = getPer10(o.damage, o.time_played) / 500;
           const healScore = getPer10(o.healing, o.time_played) / 500;
           let surviveScore = (15 - getPer10(o.deaths, o.time_played)) * 2;
