@@ -142,7 +142,7 @@
                                     <span class="text-[10px] text-slate-500 mt-1">均次消灭所需伤害</span>
                                 </div>
                                 <div class="bg-black/30 rounded-xl p-4 border border-white/5 flex flex-col justify-center">
-                                    <span class="text-[10px] text-slate-500 uppercase mb-1">参战率 (Assists/10m)</span>
+                                    <span class="text-[10px] text-slate-500 uppercase mb-1">综合参战率 (Elims+Assists/10m)</span>
                                     <span id="modAssists" class="text-2xl font-black text-white">0.0</span>
                                     <span class="text-[10px] text-slate-500 mt-1">助攻效率</span>
                                 </div>
@@ -220,7 +220,7 @@
           "最爱回家大王": "【阵亡数 ÷ 游玩时间】本周全队最高者。复活室常驻 VIP 客户，跑路时间比打架时间都长。",
           "本周小天使": "【每 10 分钟治疗量】本周全队最高者。救死扶伤，团队当之无愧的亲爹/亲妈。",
           "伤害确实是打满了大王": "【每 10 分钟伤害量】本周全队最高者。极致的火力压制，对面的心理阴影。",
-          "真正的团队核心奉献之神": "【每 10 分钟助攻数】本周全队最高者。不抢风头但无处不在，真正的节奏发动机。",
+          "真正的团队核心奉献之神": "【每 10 分钟（消灭数 + 助攻数）】本周全队最高者。不抢风头但无处不在，真正的节奏发动机。",
           "传奇刮痧大王": "【总伤害量 ÷ 消灭数】最高者。即平均每拿到一个人头需要打出海量的无效伤害，敌方辅助的终极充电宝。",
           "人头狗": "【总伤害量 ÷ 消灭数】最低者。极低的伤害却拿到了极多的击杀，K 头狂魔，效率刺客。",
           "真·杀意很大": "【每 10 分钟消灭数】本周全队最高者。眼里只有杀戮，绝对的处决机器。",
@@ -425,7 +425,7 @@
           document.getElementById('modKda').innerText = getKDA(stats.elims, stats.assists, stats.deaths).toFixed(2);
           document.getElementById('modDeaths').innerText = getPer10(stats.deaths, stats.time_played).toFixed(1);
           document.getElementById('modGuaSha').innerText = safeDiv(stats.damage, stats.elims).toFixed(0);
-          document.getElementById('modAssists').innerText = getPer10(stats.assists, stats.time_played).toFixed(1);
+          document.getElementById('modAssists').innerText = getPer10(stats.elims + stats.assists, stats.time_played).toFixed(1);
 
 
           drawRadarChart(stats);
@@ -523,7 +523,7 @@
 
 
           const elimScore = getPer10(o.elims, o.time_played);
-          const assistScore = getPer10(o.assists, o.time_played);
+          const assistScore = getPer10(o.elims + o.assists, o.time_played) * 0.6;
           const dmgScore = getPer10(o.damage, o.time_played) / 500;
           const healScore = getPer10(o.healing, o.time_played) / 500;
           let surviveScore = (15 - getPer10(o.deaths, o.time_played)) * 2;
@@ -533,7 +533,7 @@
           radarChartInstance = new Chart(ctx, {
               type: 'radar',
               data: {
-                  labels: ['击杀爆发', '助攻效率', '伤害压制', '治疗贡献', '生存走位'],
+                  labels: ['击杀爆发', '综合参战', '伤害压制', '治疗贡献', '生存走位'],
                   datasets: [{
                       label: '该位置能力值',
                       data: [elimScore, assistScore, dmgScore, healScore, surviveScore],
