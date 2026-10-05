@@ -1,0 +1,71 @@
+{
+  "TEAM_MEMBERS": [
+    "源氏神#1234",
+    "保活大王#5678",
+    "盾牌猛击#9999",
+    "爱心天使#8888",
+    "全能路人#1111"
+  ],
+  "GITHUB_TOKEN": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "GITHUB_REPO": "username/ow-tracker",
+  "HERO_MAPPING": {
+    "dva": "D.Va",
+    "doomfist": "末日铁拳",
+    "junker-queen": "渣客女王",
+    "mauga": "茂加",
+    "orisa": "奥丽莎",
+    "ramattra": "拉玛刹",
+    "reinhardt": "莱因哈特",
+    "roadhog": "路霸",
+    "sigma": "西格玛",
+    "winston": "温斯顿",
+    "wrecking-ball": "破坏球",
+    "zarya": "查莉娅",
+    "ashe": "艾什",
+    "bastion": "堡垒",
+    "cassidy": "卡西迪",
+    "echo": "回声",
+    "genji": "源氏",
+    "hanzo": "半藏",
+    "junkrat": "狂鼠",
+    "mei": "美",
+    "pharah": "法老之鹰",
+    "reaper": "死神",
+    "sojourn": "索杰恩",
+    "soldier-76": "士兵:76",
+    "sombra": "黑影",
+    "symmetra": "秩序之光",
+    "torbjorn": "托比昂",
+    "tracer": "猎空",
+    "venture": "探险家",
+    "widowmaker": "黑百合",
+    "ana": "安娜",
+    "baptiste": "巴蒂斯特",
+    "brigitte": "布里吉塔",
+    "illari": "伊拉锐",
+    "kiriko": "雾子",
+    "lifeweaver": "生命之丝",
+    "lucio": "卢西奥",
+    "mercy": "天使",
+    "moira": "莫伊拉",
+    "zenyatta": "禅雅塔"
+  },
+  "VODS": {
+    "源氏神#1234": [
+      {
+        "title": "直布罗陀防守局 - 源氏完美切后排教学",
+        "map": "Watchpoint: Gibraltar",
+        "hero": "Genji",
+        "url": "https://www.bilibili.com"
+      }
+    ],
+    "盾牌猛击#9999": [
+      {
+        "title": "国王大道进攻局 - 大锤协同与拍大招时机",
+        "map": "King's Row",
+        "hero": "Reinhardt",
+        "url": "https://www.bilibili.com"
+      }
+    ]
+  }
+}

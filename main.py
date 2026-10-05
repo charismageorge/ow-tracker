@@ -15,8 +15,8 @@ from fastapi.staticfiles import StaticFiles  # 👈 新增引入
 
 # 核心配置
 APP_VERSION = "V2.8"  # 👈 统一版本号管理
-DB_PATH = "ow_data.db"
-CONFIG_PATH = "config.json"
+DB_PATH = os.getenv("OW_DB_PATH", "ow_data.db")
+CONFIG_PATH = os.getenv("OW_CONFIG_PATH", "config.json")
 LOCAL_TZ = "America/Los_Angeles" # 强行锁定加州时间
 
 
@@ -108,61 +108,8 @@ def fetch_and_save_all_sync():
                 print(f"❌ {tag} 抓取异常: {e}")
 
 
-# --- 微信推送逻辑 ---
-def send_wechat_report_sync():
-    print(f"[{datetime.now()}] 📱 准备发送微信车队战报...")
-    config = load_config()
-    app_token = config.get("WXPUSHER_APP_TOKEN", "")
-    uids = config.get("WXPUSHER_UIDS", [])
-
-
-    if not app_token or not uids:
-        print("⚠️ 缺少 WxPusher Token 或 UID 配置，取消发送")
-        return
-
-
-    report_data = get_team_report(days=7)
-    awards = report_data.get("awards", {})
-    
-    if not awards:
-        print("无战报数据，取消发送")
-        return
-
-
-    content = f"""# 🏆 OW车队战力简报 ({APP_VERSION})
-> 数据周期：过去 7 天
-
-
-🥇 狗运小子（最佳胜率）：**{awards.get('狗运小子（最佳胜率）', '无')}**
-🛡️ 确实是会保活大王：**{awards.get('确实是会保活大王', '无')}**
-💀 最爱回家大王：**{awards.get('最爱回家大王', '无')}**
-👼 本周小天使：**{awards.get('本周小天使', '无')}**
-💥 伤害确实是打满了：**{awards.get('伤害确实是打满了大王', '无')}**
-🤝 团队核心奉献之神：**{awards.get('真正的团队核心奉献之神', '无')}**
-🔋 传奇刮痧大王：**{awards.get('传奇刮痧大王', '无')}**
-🥷 人头狗：**{awards.get('人头狗', '无')}**
-🩸 真·杀意很大：**{awards.get('真·杀意很大', '无')}**
-📉 可能要等ELO了：**{awards.get('可能真的要等ELO了', '无')}**
-🎮 应该就没在上班：**{awards.get('应该就没在上班', '无')}**
-
-
-👉 详情请查看最新静态周报看板。
-"""
-
-
-    payload = {
-        "appToken": app_token,
-        "content": content,
-        "contentType": 3,
-        "uids": uids
-    }
-    
-    try:
-        with httpx.Client() as client:
-            client.post("https://wxpusher.zjiecode.com/api/send/message", json=payload, timeout=10.0)
-            print("✅ 微信推送成功！")
-    except Exception as e:
-        print(f"❌ 微信推送失败: {e}")
+# --- 微信推送逻辑 (已废弃/移除) ---
+# 后续版本采用纯静态 GitHub Pages 归档方案，不再需要微信推送。
 
 
 # --- 新增：静态页面导出与 Git 自动推送引擎 ---
@@ -223,7 +170,6 @@ async def lifespan(app: FastAPI):
     os.makedirs("docs/data", exist_ok=True)
     
     scheduler.add_job(fetch_and_save_all_sync, 'cron', hour=4, minute=0)
-    scheduler.add_job(send_wechat_report_sync, 'cron', day_of_week='sun', hour=20, minute=0)
     scheduler.add_job(export_and_push_static, 'cron', hour=4, minute=5)
     scheduler.start()
     yield
@@ -245,12 +191,6 @@ def root():
 def manual_snapshot():
     fetch_and_save_all_sync()
     return {"status": "success", "message": "已尝试抓取，无变动数据将被自动过滤"}
-
-
-@app.post("/api/test_wechat")
-def test_wechat_push():
-    send_wechat_report_sync()
-    return {"status": "success", "message": "已触发微信推送"}
 
 
 # --- Delta 分析引擎 ---
